@@ -62,6 +62,8 @@ npx expo start
 
 ## Production hardening checklist
 
+The Expo web client is configured for Vercel with `npx expo export --platform web` and the `rn-client/dist` output directory.
+
 - Keep provider secrets server-side and exchange only short-lived client tokens.
 - Add certificate pinning where supported by the host app's threat model.
 - Persist only opaque transaction identifiers; never log PAN or CVV.
