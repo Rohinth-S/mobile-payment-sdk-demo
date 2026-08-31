@@ -52,4 +52,16 @@ class PaymentControllerTest {
         assertEquals(emptyList(), outbox.pending())
         assertEquals(PaymentState.Succeeded("txn_outbox"), states.last())
     }
+
+    @Test fun reconcilerDrainsApprovedOfflinePaymentAndKeepsDeferredEntries() = runTest {
+        val outbox = InMemoryPaymentOutbox()
+        val approved = PaymentRequest(100, "USD", "offline_approved", "idem_approved")
+        val deferred = PaymentRequest(200, "USD", "offline_deferred", "idem_deferred")
+        outbox.enqueue(approved); outbox.enqueue(deferred)
+        val reconciler = PaymentReconciler(outbox, object : PaymentTransport {
+            override suspend fun authorize(request: PaymentRequest) = if (request.idempotencyKey == "idem_approved") TransportResult.Approved("txn_reconciled") else TransportResult.Rejected("timeout", "offline", true)
+        })
+        assertEquals(ReconciliationReport(2, 1, 1), reconciler.reconcile())
+        assertEquals(listOf(deferred), outbox.pending())
+    }
 }
