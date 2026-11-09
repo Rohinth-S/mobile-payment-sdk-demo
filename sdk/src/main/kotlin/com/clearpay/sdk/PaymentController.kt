@@ -14,7 +14,9 @@ import kotlin.math.min
 class PaymentController(
     private val transport: PaymentTransport,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main),
-    private val maxAttempts: Int = 3
+    private val maxAttempts: Int = 3,
+    private val outbox: PaymentOutbox = InMemoryPaymentOutbox(),
+    private val telemetry: PaymentTelemetry = NoopPaymentTelemetry
 ) {
     private val mutableState = MutableStateFlow<PaymentState>(PaymentState.Idle)
     val state: StateFlow<PaymentState> = mutableState.asStateFlow()
@@ -27,14 +29,18 @@ class PaymentController(
         activeKey = request.idempotencyKey
         activeRequest = request
         activeJob = scope.launch {
+            outbox.enqueue(request)
             repeat(maxAttempts) { zeroBased ->
                 val attempt = zeroBased + 1
-                mutableState.value = PaymentState.Authorizing(attempt)
-                when (val response = transport.authorize(request)) {
-                    is TransportResult.Approved -> { mutableState.value = PaymentState.Succeeded(response.transactionId); return@launch }
-                    is TransportResult.ActionRequired -> { mutableState.value = PaymentState.RequiresAction(response.url); return@launch }
+                setState(request, PaymentState.Authorizing(attempt))
+                when (val response = runCatching { transport.authorize(request) }.getOrElse { error ->
+                    telemetry.transportFailure(request, error)
+                    TransportResult.Rejected("transport_error", error.message ?: "transport failed", true)
+                }) {
+                    is TransportResult.Approved -> { outbox.acknowledge(request.idempotencyKey); setState(request, PaymentState.Succeeded(response.transactionId)); return@launch }
+                    is TransportResult.ActionRequired -> { setState(request, PaymentState.RequiresAction(response.url)); return@launch }
                     is TransportResult.Rejected -> {
-                        if (!response.retryable || attempt == maxAttempts) { mutableState.value = PaymentState.Failed(response.code, response.message, response.retryable); return@launch }
+                        if (!response.retryable || attempt == maxAttempts) { setState(request, PaymentState.Failed(response.code, response.message, response.retryable)); return@launch }
                         delay(backoffMs(attempt))
                     }
                 }
@@ -48,11 +54,11 @@ class PaymentController(
         check(mutableState.value is PaymentState.RequiresAction) { "Payment is not waiting for customer action" }
         check(activeJob?.isActive != true) { "A payment operation is already in progress" }
         activeJob = scope.launch {
-            mutableState.value = PaymentState.Authorizing(1)
+            setState(request, PaymentState.Authorizing(1))
             when (val response = transport.confirm(request)) {
-                is TransportResult.Approved -> mutableState.value = PaymentState.Succeeded(response.transactionId)
-                is TransportResult.ActionRequired -> mutableState.value = PaymentState.RequiresAction(response.url)
-                is TransportResult.Rejected -> mutableState.value = PaymentState.Failed(response.code, response.message, response.retryable)
+                is TransportResult.Approved -> { outbox.acknowledge(request.idempotencyKey); setState(request, PaymentState.Succeeded(response.transactionId)) }
+                is TransportResult.ActionRequired -> setState(request, PaymentState.RequiresAction(response.url))
+                is TransportResult.Rejected -> setState(request, PaymentState.Failed(response.code, response.message, response.retryable))
             }
         }
     }
@@ -60,4 +66,5 @@ class PaymentController(
     fun cancel() { activeJob?.cancel(); activeJob = null; activeKey = null; activeRequest = null; mutableState.value = PaymentState.Idle }
     fun currentIdempotencyKey(): String? = activeKey
     private fun backoffMs(attempt: Int) = min(5000L, 250L * (1L shl (attempt - 1)))
+    private fun setState(request: PaymentRequest, next: PaymentState) { mutableState.value = next; telemetry.stateChanged(request, next) }
 }

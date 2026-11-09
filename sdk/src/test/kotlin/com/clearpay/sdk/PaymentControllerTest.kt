@@ -37,4 +37,19 @@ class PaymentControllerTest {
         assertEquals(PaymentState.Succeeded("txn_after_challenge"), controller.state.value)
         assertEquals("idem_42", controller.currentIdempotencyKey()); assertEquals(1, confirms)
     }
+
+    @Test fun outboxAcknowledgesSuccessfulPaymentAndTelemetrySeesStates() = runTest {
+        val outbox = InMemoryPaymentOutbox()
+        val states = mutableListOf<PaymentState>()
+        val telemetry = object : PaymentTelemetry {
+            override fun stateChanged(request: PaymentRequest, state: PaymentState) { states += state }
+            override fun transportFailure(request: PaymentRequest, error: Throwable) = Unit
+        }
+        val controller = PaymentController(object : PaymentTransport {
+            override suspend fun authorize(request: PaymentRequest) = TransportResult.Approved("txn_outbox")
+        }, TestScope(StandardTestDispatcher(testScheduler)), outbox = outbox, telemetry = telemetry)
+        controller.start(PaymentRequest(500, "USD", "order_outbox", "idem_outbox")); testScheduler.advanceUntilIdle()
+        assertEquals(emptyList(), outbox.pending())
+        assertEquals(PaymentState.Succeeded("txn_outbox"), states.last())
+    }
 }
