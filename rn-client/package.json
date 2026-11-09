@@ -1,1 +1,20 @@
-{"name":"payment-sdk-demo-client","private":true,"version":"1.0.0","scripts":{"start":"expo start","typecheck":"tsc --noEmit"},"dependencies":{"expo":"latest","react":"latest","react-native":"latest"},"devDependencies":{"typescript":"latest","@types/react":"latest"}}
+{
+  "name": "payment-sdk-demo-client",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "latest",
+    "react": "latest",
+    "react-dom": "19.3.0",
+    "react-native": "latest",
+    "react-native-web": "^0.21.4"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "@types/react": "latest"
+  }
+}
