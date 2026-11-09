@@ -15,7 +15,7 @@ class InMemoryPaymentOutbox : PaymentOutbox {
     private val lock = Mutex()
     private val entries = linkedMapOf<String, PaymentRequest>()
 
-    override suspend fun enqueue(request: PaymentRequest) = lock.withLock { entries.putIfAbsent(request.idempotencyKey, request) }
+    override suspend fun enqueue(request: PaymentRequest) { lock.withLock { entries.putIfAbsent(request.idempotencyKey, request) } }
     override suspend fun pending(): List<PaymentRequest> = lock.withLock { entries.values.toList() }
-    override suspend fun acknowledge(idempotencyKey: String) = lock.withLock { entries.remove(idempotencyKey) }
+    override suspend fun acknowledge(idempotencyKey: String) { lock.withLock { entries.remove(idempotencyKey) } }
 }
