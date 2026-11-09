@@ -1,0 +1,1 @@
+{"name":"payment-sdk-demo-client","private":true,"version":"1.0.0","scripts":{"start":"expo start","typecheck":"tsc --noEmit"},"dependencies":{"expo":"latest","react":"latest","react-native":"latest"},"devDependencies":{"typescript":"latest","@types/react":"latest"}}
