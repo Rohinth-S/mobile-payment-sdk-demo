@@ -2,6 +2,8 @@
 
 A Kotlin Android payment SDK core with a React Native/Expo client that demonstrates secure transaction state handling, stable idempotency, retry discipline, and explicit customer-action recovery.
 
+Live Expo web demo: https://mobile-payment-sdk-demo.vercel.app
+
 ## Scope
 
 This repository implements the client-side contract and a deterministic demo transport boundary. It does not process real funds. A production adapter would connect `PaymentTransport` to a provider through a backend tokenization endpoint; secret keys must never ship in the mobile binary.
