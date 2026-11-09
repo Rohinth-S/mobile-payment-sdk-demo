@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "ClearPay SDK Demo",
+    "slug": "clearpay-sdk-demo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"]
+  }
+}

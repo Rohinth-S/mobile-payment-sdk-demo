@@ -25,7 +25,12 @@ sealed interface PaymentState {
 
 data class PaymentReceipt(val transactionId: String, val amountMinor: Long, val currency: String)
 
-interface PaymentTransport { suspend fun authorize(request: PaymentRequest): TransportResult }
+interface PaymentTransport {
+    suspend fun authorize(request: PaymentRequest): TransportResult
+
+    /** Completes a provider challenge using the same idempotency context. */
+    suspend fun confirm(request: PaymentRequest): TransportResult = authorize(request)
+}
 sealed interface TransportResult {
     data class Approved(val transactionId: String) : TransportResult
     data class ActionRequired(val url: String) : TransportResult

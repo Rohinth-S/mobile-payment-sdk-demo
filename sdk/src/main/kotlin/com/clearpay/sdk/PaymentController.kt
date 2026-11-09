@@ -20,10 +20,12 @@ class PaymentController(
     val state: StateFlow<PaymentState> = mutableState.asStateFlow()
     private var activeJob: Job? = null
     private var activeKey: String? = null
+    private var activeRequest: PaymentRequest? = null
 
     fun start(request: PaymentRequest) {
         check(activeJob?.isActive != true) { "A payment is already in progress" }
         activeKey = request.idempotencyKey
+        activeRequest = request
         activeJob = scope.launch {
             repeat(maxAttempts) { zeroBased ->
                 val attempt = zeroBased + 1
@@ -40,7 +42,22 @@ class PaymentController(
         }
     }
 
-    fun cancel() { activeJob?.cancel(); activeJob = null; activeKey = null; mutableState.value = PaymentState.Idle }
+    /** Resumes a provider challenge after the host app completes customer verification. */
+    fun confirmCustomerAction() {
+        val request = activeRequest ?: error("No payment is waiting for customer action")
+        check(mutableState.value is PaymentState.RequiresAction) { "Payment is not waiting for customer action" }
+        check(activeJob?.isActive != true) { "A payment operation is already in progress" }
+        activeJob = scope.launch {
+            mutableState.value = PaymentState.Authorizing(1)
+            when (val response = transport.confirm(request)) {
+                is TransportResult.Approved -> mutableState.value = PaymentState.Succeeded(response.transactionId)
+                is TransportResult.ActionRequired -> mutableState.value = PaymentState.RequiresAction(response.url)
+                is TransportResult.Rejected -> mutableState.value = PaymentState.Failed(response.code, response.message, response.retryable)
+            }
+        }
+    }
+
+    fun cancel() { activeJob?.cancel(); activeJob = null; activeKey = null; activeRequest = null; mutableState.value = PaymentState.Idle }
     fun currentIdempotencyKey(): String? = activeKey
     private fun backoffMs(attempt: Int) = min(5000L, 250L * (1L shl (attempt - 1)))
 }

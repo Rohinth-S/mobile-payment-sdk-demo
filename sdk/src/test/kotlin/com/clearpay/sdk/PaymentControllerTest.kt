@@ -24,4 +24,17 @@ class PaymentControllerTest {
         controller.start(PaymentRequest(1299, "USD", "order_42", "idem_42")); testScheduler.advanceUntilIdle()
         assertEquals(PaymentState.Failed("declined", "insufficient funds", false), controller.state.value); assertEquals(1, calls)
     }
+
+    @Test fun resumesProviderChallengeWithoutChangingRequestKey() = runTest {
+        var confirms = 0
+        val transport = object : PaymentTransport {
+            override suspend fun authorize(request: PaymentRequest) = TransportResult.ActionRequired("https://issuer.test/challenge")
+            override suspend fun confirm(request: PaymentRequest): TransportResult { confirms++; return TransportResult.Approved("txn_after_challenge") }
+        }
+        val controller = PaymentController(transport, TestScope(StandardTestDispatcher(testScheduler)))
+        controller.start(PaymentRequest(1299, "USD", "order_42", "idem_42")); testScheduler.advanceUntilIdle()
+        controller.confirmCustomerAction(); testScheduler.advanceUntilIdle()
+        assertEquals(PaymentState.Succeeded("txn_after_challenge"), controller.state.value)
+        assertEquals("idem_42", controller.currentIdempotencyKey()); assertEquals(1, confirms)
+    }
 }

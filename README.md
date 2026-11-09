@@ -35,7 +35,7 @@ rn-client/
 1. The host app creates a `PaymentRequest` with an amount, currency, merchant reference, and idempotency key.
 2. `PaymentController` emits `Authorizing(attempt)` and sends the same request key for retries.
 3. A transient rejection uses bounded exponential backoff; permanent rejection stops immediately.
-4. `ActionRequired` pauses for customer verification instead of silently retrying.
+4. `ActionRequired` pauses for customer verification instead of silently retrying; the host resumes with `confirmCustomerAction()` after its provider challenge UI completes.
 5. The UI observes a single `StateFlow` and renders a receipt only after `Succeeded`.
 
 ## Design decisions
